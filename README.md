@@ -149,3 +149,15 @@ docker build -t USERNAME/IMAGENAME:VERSION .
 docker push USERNAME/IMAGENAME:VERSION
 ```
 
+
+
+## Development log
+
+The following is the relation of docker image tag and which commit it is based on.
+
+| Docker image tag         | Github commit                                                |
+| ------------------------ | ------------------------------------------------------------ |
+| nan42/pdesmas:cluster1.3 | [CubicPill/PDES-MAS:b29571a](https://github.com/CubicPill/PDES-MAS/tree/b29571a8eab21efe7eb6483aef66dd5293347baa) |
+
+The code in `image/cluster/project` in this repository is the same as [CubicPill/PDES-MAS:b29571a](https://github.com/CubicPill/PDES-MAS/tree/b29571a8eab21efe7eb6483aef66dd5293347baa).
+
