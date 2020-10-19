@@ -6,7 +6,7 @@
 
 Here we will create a container cluster that consists of multiple running docker containers. Each container runs one MPI process.
 
-To configure the settings for such a cluster, a dedicated configuration file `local.conf` is used. 
+To configure the settings for such a cluster, a dedicated configuration file `local_setup/local.conf` is used. 
 
 Configure variables in `local.conf`. Simply change the `NUM`,  `IMAGE_TAG`. 
 
