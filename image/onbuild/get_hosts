@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# Include the variables that store the Docker service names
+# shellcheck disable=SC1091
+. /etc/opt/service_names
+
+( dig +nocmd +nocomments +noquestion +nostats "tasks.$MPI_MASTER_SERVICE_NAME" | \
+  awk '{print $5}' \
+& dig +nocmd +nocomments +noquestion +nostats "tasks.$MPI_WORKER_SERVICE_NAME"|\
+  awk '{print $5}' ) | sort -u
+
+
+#& dig +nocmd +nocomments +noquestion +nostats "$MPI_WORKER_SERVICE_NAME" | \
+#  awk '{print $5}' \
+#& dig +nocmd +nocomments +noquestion +nostats "tasks.$MPI_WORKER_SERVICE_NAME"|\
+#  awk '{print $5}' ) | sort -u
+#) | sort -u
