@@ -1,6 +1,6 @@
 
-
-## Run on local desktop
+# How to run PDES-MAS in a docker container cluster
+## A. Run on local desktop
 
 ### 1. Configure cluster settings
 
@@ -106,7 +106,7 @@ Spin up the containers
    for i in 1 2 3 4 5 6; do scp worker${i}:/project/bin/log.${i} .; done
    ```
 
-   To copy the logs in container back to the VM, run the following **on the local machine**:
+   To copy the logs in container back to the local machine, run the following **on the local machine**:
 
    ```
    docker cp CONTAINER_NAME:PATH LOCAL_PATH
@@ -124,10 +124,11 @@ docker network delete ${docker_net}
 ```
 
 
+## B. Run on AWS
+See this directory [aws_setup](aws_setup)
 
 
-
-## Build customized docker image for PDES-MAS
+# Build customized docker image for PDES-MAS
 
 If the PDES-MAS code needs to be modified, we need to build a customized image, rather than simply pull the image from docker hub. Here we demonstrate by using docker hub. You should have configured your docker hub account on your machine.
 
@@ -150,8 +151,7 @@ docker push USERNAME/IMAGENAME:VERSION
 ```
 
 
-
-## Development log
+# Development log
 
 The following is the relation of docker image tag and which commit it is based on.
 
