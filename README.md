@@ -91,7 +91,7 @@ Spin up the containers
    ```shell
    mpirun --host master,worker1,worker2,worker3,worker4,worker5,worker6 \
    -np 7 --map-by node --mca btl_tcp_if_include eth0 \
-   sh -c './tileworld xxxxxxx > ./log.$OMPI_COMM_WORLD_RANK'
+   sh -c './tileworld 32 7 2 200 > ./log.$OMPI_COMM_WORLD_RANK'
    ```
 
 4. To access other containers **from master container**, say worker1, simply run:
