@@ -158,6 +158,7 @@ The following is the relation of docker image tag and which commit it is based o
 | Docker image tag         | Github commit                                                |
 | ------------------------ | ------------------------------------------------------------ |
 | nan42/pdesmas:cluster1.3 | [CubicPill/PDES-MAS:b29571a](https://github.com/CubicPill/PDES-MAS/tree/b29571a8eab21efe7eb6483aef66dd5293347baa) |
+| nan42/pdesmas:cluster1.4 | [CubicPill/PDES-MAS:3fe544a](https://github.com/CubicPill/PDES-MAS/tree/3fe544ae0e2511ce1573ff627ec9d91faaccbb4b) |
 
-The code in `image/cluster/project` in this repository is the same as [CubicPill/PDES-MAS:b29571a](https://github.com/CubicPill/PDES-MAS/tree/b29571a8eab21efe7eb6483aef66dd5293347baa).
+The code in `image/cluster/project` in this repository is the same as [CubicPill/PDES-MAS:b29571a](https://github.com/CubicPill/PDES-MAS/tree/b29571a8eab21efe7eb6483aef66dd5293347baa), which is the source code of nan42/pdesmas:cluster1.3.
 
