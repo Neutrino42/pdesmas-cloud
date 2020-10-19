@@ -1,76 +1,75 @@
-## 1. Set up AWS CLI
-
-Install and configure aws cli on local computer with the IAM role credentials:
-
-https://docs.aws.amazon.com/zh_cn/cli/latest/userguide/cli-configure-quickstart.html
 
 
+##Run on local desktop
 
-## 2. Build docker image for PDES-MAS
+### 1. Configure cluster settings
 
-First, copy the PDES-MAS code to the  `project` directory
+Here we will create a container cluster that consists of multiple running docker containers. Each container runs one MPI process.
 
-Second, build the image 
+To configure the settings for such a cluster, a dedicated configuration file `local.conf` is used. 
 
-```
-docker build -t USERNAME/IMAGENAME:VERSION .
-```
+Configure variables in `local.conf`. Simply change the `NUM`,  `IMAGE_TAG`. 
 
-Then Push you image `USERNAME/IMAGENAME:VERSION` to docker hub.
+| Variable   | Example                  | description                                         |
+| ---------- | ------------------------ | --------------------------------------------------- |
+| NUM        | 15                       | Number of containers (MPI processes) to be launched |
+| IMAGE_TAG  | nan42/pdesmas:cluster1.3 | docker image to be pulled from docker hub           |
+| docker_net | test-net                 | The name of the docker network. No need to change   |
 
-## 3. Configure cluster settings
+### 2. Container cluster setup
 
-Configure variables in `aws.conf`. Simply change the `VM_NUM`, `VM_TYPE`, `IMAGE_TAG`. Note the `IMAGE_TAG` should be the image pushed to docker hub just now -- `USERNAME/IMAGENAME:VERSION`
-
-| Variable     | Example                  | description                                                  |
-| ------------ | ------------------------ | ------------------------------------------------------------ |
-| VM_LIST_FILE | vm.txt                   | The file where all VM DNS names are stored                   |
-| VM_NUM       | 15                       | Number of VMs to be launched                                 |
-| VM_TYPE      | t2.micro                 | Type of VM instance                                          |
-| VM_TAG_KEY   | experiment               | Tag key for the VMs, used to find our VMs later. No need to change. |
-| VM_TAG_VALUE | 7LP                      | Tag value for the VMs. No need to change.                    |
-| IMAGE_TAG    | nan42/pdesmas:cluster1.3 | docker image to be pulled from docker hub                    |
-| docker_net   | test-net                 | The name of the docker network. No need to change            |
-| user         | ubuntu                   | The user name to be used when SSH to VMs.                    |
-
-
-
-## 4. Set up AWS cluster
-
-1. First order new VMs and configure docker swarm:
+We need docker swarm here. First initialize docker swarm.
 
 ```
-./newvm.sh
+docker swarm init
 ```
 
-2. Then initiate one container on each VM:
+Load the variables in configuration file
+
+```shell
+. ./local.conf
+```
+
+Pull the docker image that contains PDES-MAS:
+
+```bash
+docker pull ${IMAGE_TAG}
+```
+
+Initialize docker swarm and create a customized network for containers to communicate.
+
+```shell
+docker network create --driver=overlay --attachable ${docker_net}
+```
+
+Spin up the containers 
 
 ```
-./up_containers.sh
+./up_containers_local.sh
 ```
 
-This command will name the containers as "master", "worker1", "worker2", "worker3" ... and so forth.
+### 3. Run PDES-MAS
 
-## 5. Run PDES-MAS
+1. Load the variables in configuration file
 
-1. First ssh into master VM -- **simply copy the command** shown in the output of `./upcontainers.sh`. The command will look like this:
-
-   ```
-   ssh -i "myKeyPair.pem" ubuntu@xxxxxxxxx
+   ```shell
+   . ./local.conf
    ```
 
-2. Once SSHed into the VM, then log into the master container
+2. Log into the master container
 
-   ```
+   ```shell
    docker exec -it --user mpi master bash
    ```
 
-3. Finally run PDES-MAS in master container:
+3. Run PDES-MAS in master container:
+
+   be sure to change the argument `-np` to the number of containers you started in the previous section. Here is an example for image `nan42/pdesmas:cluster1.3`.
 
    ```shell
    mpirun --hostfile hostfile \
    -np 7 --map-by node --mca btl_tcp_if_include eth0 \
-   sh -c './tileworld xxxxxxx > ./log.$OMPI_COMM_WORLD_RANK'
+   sh -c './tileworld 32 7 2 200 > ./log.$OMPI_COMM_WORLD_RANK'
    ```
 
    The file `hostfile` looks like:
@@ -107,17 +106,46 @@ This command will name the containers as "master", "worker1", "worker2", "worker
    for i in 1 2 3 4 5 6; do scp worker${i}:/project/bin/log.${i} .; done
    ```
 
-   To copy the logs in container back to the VM, run the following **on the VM**:
+   To copy the logs in container back to the VM, run the following **on the local machine**:
 
    ```
-   docker cp CONTAINER_NAME:PATH VM_PATH
+   docker cp CONTAINER_NAME:PATH LOCAL_PATH
    ```
 
-   
 
-## 6. Delete VMs
+### 4. Delete containers
 
 ```
-./terminate.sh
+./terminate_local.sh
+```
+
+```
+docker network delete ${docker_net}
+```
+
+
+
+
+
+## Build customized docker image for PDES-MAS
+
+If the PDES-MAS code needs to be modified, we need to build a customized image, rather than simply pull the image from docker hub. Here we demonstrate by using docker hub. You should have configured your docker hub account on your machine.
+
+
+
+1. First, copy your customized PDES-MAS code to the  `image/cluster/project` directory
+
+2. Second, build the image as follows. 
+
+```
+docker build -t USERNAME/IMAGENAME:VERSION .
+```
+
+`USERNAME` is your docker hub account username. `IMAGENAME` and `VERSION` can be customized.
+
+3. Then Push you image `USERNAME/IMAGENAME:VERSION` to docker hub.
+
+```
+docker push USERNAME/IMAGENAME:VERSION
 ```
 
