@@ -1,6 +1,6 @@
 ## 1. Set up AWS CLI
 
-Install and configure aws cli on local computer with the IAM role credentials:
+Install and configure aws cli on **your local machine** with the IAM role credentials:
 
 https://docs.aws.amazon.com/zh_cn/cli/latest/userguide/cli-configure-quickstart.html
 
@@ -77,7 +77,7 @@ This command will name the containers as "master", "worker1", "worker2", "worker
    sh -c './tileworld xxxxxxx > ./log.$OMPI_COMM_WORLD_RANK'
    ```
 
-   The file `hostfile` looks like:
+   The file `hostfile` should have been generated automatically by `up_containers.sh`. You do not need to care about this file. Its content will look like:
 
    ```
    master
@@ -90,6 +90,8 @@ This command will name the containers as "master", "worker1", "worker2", "worker
    ```
 
    Note that `--mca btl_tcp_if_include eth0` is important. If this argument is missing, `mpirun` may not be able to connect to other containers (MPI nodes) due to the problem with container network interface.
+   
+   For further information for the argument of OpenMPI, please check the official document in these links: [--hostfile](https://www.open-mpi.org/faq/?category=running#mpirun-hostfile), [--host](https://www.open-mpi.org/faq/?category=running#mpirun-host), [--mca btl_tcp_if_include](https://www.open-mpi.org/faq/?category=tcp#tcp-selection).
 
    Alternatively, you can specify the hostname explicitly, where the hostnames are the names of our containers:
 
