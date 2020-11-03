@@ -10,11 +10,21 @@ aws ec2 describe-instances \
 # https://stackoverflow.com/questions/5410757/how-to-delete-from-a-text-file-all-lines-that-contain-a-specific-string
 # if error, refer to the above link
 
-sed -i '' '/[]\[]/d' ${VM_LIST_FILE}
-sed -i '' '/\"\"/d' ${VM_LIST_FILE}
-sed -i '' 's/,//' ${VM_LIST_FILE}
-sed -i '' 's/\"//' ${VM_LIST_FILE}
-sed -i '' 's/\"//' ${VM_LIST_FILE}
-sed -i '' 's/ *//' ${VM_LIST_FILE}
+if [[ "$OSTYPE" == "darwin"* ]]; then 
+	sed -i '' '/[]\[]/d' ${VM_LIST_FILE}
+	sed -i '' '/\"\"/d' ${VM_LIST_FILE}
+	sed -i '' 's/,//' ${VM_LIST_FILE}
+	sed -i '' 's/\"//' ${VM_LIST_FILE}
+	sed -i '' 's/\"//' ${VM_LIST_FILE}
+	sed -i '' 's/ *//' ${VM_LIST_FILE}
+
+else
+	sed -i '/[]\[]/d' ${VM_LIST_FILE}
+	sed -i '/\"\"/d' ${VM_LIST_FILE}
+	sed -i 's/,//' ${VM_LIST_FILE}
+	sed -i 's/\"//' ${VM_LIST_FILE}
+	sed -i 's/\"//' ${VM_LIST_FILE}
+	sed -i 's/ *//' ${VM_LIST_FILE}
+fi
 
 cat ${VM_LIST_FILE}
