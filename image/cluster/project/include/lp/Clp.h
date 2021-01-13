@@ -65,10 +65,7 @@ namespace pdesmas {
 
       void AddSSV(const SsvId&, const AbstractValue*);
       void SetGvt(unsigned long);
-
-    map<unsigned long, list<unsigned long>> GetAgentTimeHistoryMap() const override;
-
-    void Send();
+      void Send();
       void Receive();
   };
 }

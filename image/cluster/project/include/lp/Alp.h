@@ -16,7 +16,7 @@
 #include <vector>
 #include <interface/IdentifierHandler.h>
 #include <PrivateVariableStorage.h>
-
+#include <set>
 namespace pdesmas {
   class Agent;
 
@@ -31,6 +31,8 @@ namespace pdesmas {
     map<unsigned long, list<unsigned long> > agent_lvt_history_map_; // use this to perform LVT rollback
     map<unsigned long, PrivateVariableStorage> agent_local_variables_map_;
     map<unsigned long, bool> agent_cancel_flag_map_;
+    set<unsigned long> restart_map_;
+    bool restart_p=false;
     int fParentClp;
     Mutex fProcessMessageMutex;
 
@@ -45,13 +47,6 @@ namespace pdesmas {
 
     void ProcessMessage(const RangeQueryMessage *);
 
-    bool SetAlpManagedAgentLvt(unsigned long agent_id, unsigned long newLvt);
-
-    bool SetAgentLocalLvtAfterRollback(unsigned long agent_id, unsigned long newLvt);
-
-    Agent *GetAgent(unsigned long agentId);
-
-    bool CleanUpAgentLvtHistory(unsigned long timestamp);
   public:
     Alp(unsigned int pRank, unsigned int pCommSize,
         unsigned int pNumberOfClps, unsigned int pNumberOfAlps,
@@ -66,13 +61,12 @@ namespace pdesmas {
 
     int GetParentClp() const;
 
-    unsigned long GetAlpManagedAgentLvt(unsigned long agent_id) const;
+    void triggerSelfRestart(unsigned long agent_id);
+    void doSelfRestart( );
 
-    bool UpdateAgentLvtToAlp(unsigned long agentId, unsigned long newLvt);
+    unsigned long GetAgentLvt(unsigned long agent_id) const;
 
-    bool RecordAgentLvtHistory(unsigned long agent_id, unsigned long timestamp);
-
-    unsigned long RollbackAgentLvtHistory(unsigned long agentId, unsigned long timestamp);
+    bool SetAgentLvt(unsigned long agent_id, unsigned long lvt);
 
     bool HasAgent(unsigned long agent_id);
 
@@ -86,10 +80,7 @@ namespace pdesmas {
 
     const AbstractMessage *GetResponseMessage(unsigned long agent_id) const;
 
-
     bool TerminationCondition() const override;
-
-    map<unsigned long, list<unsigned long>> GetAgentTimeHistoryMap() const override;
 
     void SetGvt(unsigned long);
 

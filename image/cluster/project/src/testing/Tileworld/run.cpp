@@ -7,20 +7,22 @@
 
 using namespace std;
 using namespace pdesmas;
-int endTime = 1000;
+int endTime = 100;
 
 int main(int argc, char **argv) {
-  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_level(spdlog::level::info);
+
   spdlog::set_pattern("%f [%P] %+");
   Simulation sim = Simulation();
 
   uint64_t numAgents = std::atoll(argv[1]);
-  uint64_t numMPI = std::atoll(argv[2]);
-  int randSeed = std::atoi(argv[3]);
-  endTime = std::atoi(argv[4]);
 
-  const int worldSize = sqrt(numAgents) * 18;
-  const uint64_t numTile = numAgents / 4;
+  int randSeed = std::atoi(argv[2]);
+  endTime = 100;
+  int numMPI;
+  sim.InitMPI(&numMPI);
+  const int worldSize = std::atoi(argv[3]);
+  const uint64_t numTile = std::atol(argv[4]); // 1024
   srand(randSeed * numMPI);
 
   // numMPI -> CLP and ALP
@@ -64,11 +66,10 @@ int main(int argc, char **argv) {
   srand(randSeed * numMPI + sim.rank());
   if (sim.type() == "ALP") {
     for (uint64_t i = 0; i < numAgents / numALP; ++i) {
-      TileWorldAgent *test = new TileWorldAgent(0, endTime, AGENT_ID(sim.rank(), i), worldSize, worldSize, 10,
+      TileWorldAgent *test = new TileWorldAgent(0, endTime, AGENT_ID(sim.rank(), i), worldSize, worldSize, 3,
                                                 randSeed);
       sim.add_agent(test);
     }
-
   }
 
   sim.Run();

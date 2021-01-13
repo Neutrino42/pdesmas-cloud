@@ -174,6 +174,9 @@ void Clp::Send() {
       // Skip
       break;
   }
+  ostringstream out;
+  sendMessage->Serialise(out);
+  spdlog::debug("CLP {} send message: {}", this->GetRank(), out.str());
   fMPIInterface->Send(sendMessage);
 }
 
@@ -189,7 +192,9 @@ void Clp::Receive() {
   }
   // If there's no message, return
   if (NULL == receivedMessage) return;
-
+  ostringstream out;
+  receivedMessage->Serialise(out);
+  spdlog::debug("CLP {} receive message: {}", this->GetRank(), out.str());
   // If the received message is a simulation message, increase #hops
   switch (receivedMessage->GetType()) {
     case SINGLEREADMESSAGE: {
@@ -362,16 +367,15 @@ void Clp::ProcessMessage(const SingleReadMessage *pSingleReadMessage) {
   // SendReadMessageAndGetResponse the value of the SSV
   LOG(logFINEST) << "Clp::ProcessMessage(SingleReadMessage)(" << GetRank()
                  << ")# SendReadMessageAndGetResponse SSV from message: " << *pSingleReadMessage;
-  if (pSingleReadMessage->GetTimestamp() < fGVT) {
-    spdlog::critical("Clp::ProcessMessage(SingleReadMessage): Message timestamp less than GVT, {}<{}",
+  unsigned long ts = pSingleReadMessage->GetTimestamp();
+  if (ts < fGVT) {
+    spdlog::critical("Clp::ProcessMessage(SingleReadMessage): Message timestamp less that GVT, {}<{}",
                      pSingleReadMessage->GetTimestamp(), fGVT);
-    ostringstream ss;
-    pSingleReadMessage->Serialise(ss);
-    spdlog::critical(ss.str());
-    exit(1);
+    ts = fGVT;
   }
+
   AbstractValue *value = fSharedState.Read(pSingleReadMessage->GetSsvId(),
-                                           pSingleReadMessage->GetOriginalAgent(), pSingleReadMessage->GetTimestamp());
+                                           pSingleReadMessage->GetOriginalAgent(), ts);
   // Create and send response message
   SingleReadResponseMessage *singleReadMessageResponse =
       new SingleReadResponseMessage();
@@ -670,7 +674,7 @@ void Clp::MigrateStateVariables(
       fSharedState.RemoveWritePeriodList(*ssvIdListIterator, rollbackList);
       // Delete the SSV from the shared state
       fSharedState.Delete(*ssvIdListIterator);
-      // Send rollbacks if necessary
+      // Send rollbacls if necessary
       if (rollbackList.GetSize() > 0) {
         RollbackTag rbTag(*ssvIdListIterator, ULONG_MAX, ROLLBACK_BY_SM);
         LOG(logFINEST) << "Sending rollbacks after state migration";
@@ -708,19 +712,19 @@ void Clp::ProcessMessage(const RangeQueryMessage *pRangeQueryMessage) {
   // If this CLP hasn't been seen before
   if (!(fRangeTracker->HasEntry(newRangeQueryMessage->GetIdentifier()))) {
     //spdlog::debug("clp {}, RQ hasn't been seen before", this->GetRank());
-    for (int i = 0; i < DIRECTION_SIZE; ++i) {
-      if (fRangeRoutingTable[i]) {
-        Range *r = fRangeRoutingTable[i]->GetRangeCopy(fStartTime);
+//    for (int i = 0; i < DIRECTION_SIZE; ++i) {
+//      if (fRangeRoutingTable[i]) {
+//        Range *r = fRangeRoutingTable[i]->GetRangeCopy(fStartTime);
 //        if (r) {
 //          spdlog::debug("clp {0}, direction {1}: ({2},{3})-({4},{5})",
 //                        this->GetRank(), i,
 //                        r->GetMinRangeValue().GetX(), r->GetMinRangeValue().GetY(),
 //                        r->GetMaxRangeValue().GetX(), r->GetMaxRangeValue().GetY());
 //        }
-
-        delete r;
-      }
-    }
+//
+//        delete r;
+//      }
+//    }
     // This CLP hasn't been seen before
     // Find the incoming port
     Direction incomingPort = fRouter->GetDirectionByLpRank(
@@ -899,6 +903,7 @@ void Clp::ProcessMessage(const RangeUpdateMessage *pRangeUpdateMessage) {
   // Declare a rollback list
   RollbackList rollbacklist;
   // Update the range routing table
+  // FIXME check pRangeUpdateMessage->GetTimestamp()
   fRangeRoutingTable[(int) originPort]->ProcessRangeUpdate(
       pRangeUpdateMessage->GetTimestamp(), range, rollbacklist);
   // Send rollbacks, if any
@@ -1023,10 +1028,10 @@ void Clp::InitialisePortRanges(const Initialisor *pInitialisor) {
   for (int i = 0; i < DIRECTION_SIZE; ++i) {
     fRangeRoutingTable[i]->InsertRangePeriod(fStartTime,
                                              RangePeriod(fStartTime, PortRange[i]));
-//    if (PortRange[i])
-//      spdlog::debug("Insert to rrt: rank {0}, direction {1}, ({2},{3})-({4},{5})", this->GetRank(),
-//                    i, PortRange[i]->GetMinRangeValue().GetX(), PortRange[i]->GetMinRangeValue().GetY(),
-//                    PortRange[i]->GetMaxRangeValue().GetX(), PortRange[i]->GetMaxRangeValue().GetY());
+    if (PortRange[i])
+      spdlog::debug("Insert to rrt: rank {0}, direction {1}, ({2},{3})-({4},{5})", this->GetRank(),
+                    i, PortRange[i]->GetMinRangeValue().GetX(), PortRange[i]->GetMinRangeValue().GetY(),
+                    PortRange[i]->GetMaxRangeValue().GetX(), PortRange[i]->GetMaxRangeValue().GetY());
     if (PortRange[i]) delete PortRange[i];
   }
   // Clean up clp range map
@@ -1069,11 +1074,6 @@ void Clp::InitialisePortRanges(const Initialisor *pInitialisor) {
       delete r;
     }
   }
-}
-
-map<unsigned long, list<unsigned long>> Clp::GetAgentTimeHistoryMap() const {
-  // for clp, there's no history
-  return map<unsigned long, list<unsigned long>>();
 }
 
 #endif

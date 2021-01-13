@@ -3,7 +3,7 @@ project(PDES-MAS)
 find_package(MPI REQUIRED)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_COMPILER mpicxx)
-set(PDESMAS_CXX_FLAGS "-DRANGE_QUERIES -DSSV_LOCALISATION -fPIC -Wall -pthread -lpthread -Wl,--no-as-needed")
+set(PDESMAS_CXX_FLAGS "-DRANGE_QUERIES -DSSV_LOCALISATION -fPIC -Wall -pthread -lpthread -Wl,--no-as-needed,-rpath='${ORIGIN}'")
 
 link_libraries(m stdc++ pthread)
 
@@ -66,7 +66,6 @@ add_library(PDESMAS SHARED
         src/messages/content/HasTimestamp.cpp
         src/messages/content/HasValue.cpp
         src/messages/content/HasWriteStatus.cpp
-        src/messages/content/HasAgentTimeHistoryRecord.cpp
         src/messages/AbstractMessage.cpp
         src/messages/AntiMessage.cpp
         src/messages/ControlMessage.cpp
@@ -114,12 +113,12 @@ add_library(PDESMAS SHARED
         src/util/Mutex.cpp
         src/util/Thread.cpp
         src/interface/Simulation.cpp
-        src/state/PrivateVariableStorage.cpp
-        )
+        src/state/PrivateVariableStorage.cpp)
 
 add_executable(runtest src/testing/TestAgent.cpp src/testing/run.cpp)
 add_executable(tileworld src/testing/Tileworld/TileWorldAgent.cpp src/testing/Tileworld/run.cpp)
 add_executable(naivemb src/testing/NaiveMailbox/NaiveAgent.cpp src/testing/NaiveMailbox/run.cpp)
+
 target_link_libraries(runtest PDESMAS)
 target_link_libraries(tileworld PDESMAS)
 target_link_libraries(naivemb PDESMAS)

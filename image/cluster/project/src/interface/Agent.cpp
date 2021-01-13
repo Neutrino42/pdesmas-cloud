@@ -17,7 +17,7 @@
 #include "GvtRequestMessage.h"
 #include "spdlog/spdlog.h"
 #include "Types.h"
-
+#include <chrono>
 
 Agent::Agent(unsigned long const start_time, unsigned long const end_time, unsigned long agent_id) :
     start_time_(start_time), end_time_(end_time), agent_id_(agent_id) {
@@ -27,28 +27,24 @@ Agent::Agent(unsigned long const start_time, unsigned long const end_time, unsig
 
 void Agent::Body() {
   //spdlog::debug("Agent thread is up");
-  while (GetLVT() < end_time_) {
-    spdlog::debug("Cycle begin, agent {}, GVT {}, LVT {}", this->agent_id_, this->GetGVT(), this->GetLVT());
-    Cycle();
-    UpdateLvtToAlp();
-    spdlog::debug("Cycle end, agent {}, GVT {}, LVT {}", this->agent_id_, this->GetGVT(), this->GetLVT());
 
+  while (GetLVT() < end_time_) {
+    Cycle();
   }
   spdlog::debug("Agent {0} exit, LVT {1}, GVT {2}", this->agent_id(), this->GetLVT(), this->GetGVT());
-  spdlog::debug("LVT >= EndTime, agent exit, id={0}", this->agent_id());
   while (this->GetGVT() < end_time_) {
     if (this->attached_alp_->GetCancelFlag(this->agent_id())) {
       return;
     }
-    sleep(1);
-    SendGVTMessage(); // Initiate GVT calculation to get ready for termination
-    spdlog::info("Agent {} finished, waiting for GVT,  GVT {}, LVT {}, ALP LVT {}", this->agent_id(), this->GetGVT(),
-                 this->GetLVT(),
+    sleep(2);
+    if (this->agent_id() % 10 == 1) {
+      SendGVTMessage(); // Initiate GVT calculation to get ready for termination
+    } else {
+      break;
+    }
+    spdlog::info("Agent {} finsihed, GVT {}, LVT {}, ALP LVT {}", this->agent_id(), this->GetGVT(), this->GetLVT(),
                  this->GetAlpLVT());
   }
-  spdlog::info("Agent {} reached target GVT, exit", this->agent_id());
-
-
 }
 
 const SingleReadResponseMessage *Agent::SendReadMessageAndGetResponse(unsigned long pVariableId, unsigned long pTime) {
@@ -66,6 +62,7 @@ const SingleReadResponseMessage *Agent::SendReadMessageAndGetResponse(unsigned l
   singleReadMessage->SetSsvId(ssvId);
   singleReadMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
+  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   if (ret->GetType() != SINGLEREADRESPONSEMESSAGE) {
     spdlog::critical("Expecting SINGLEREADRESPONSEMESSAGE, get {}", ret->GetType());
@@ -95,6 +92,7 @@ Agent::SendWriteMessageAndGetResponse(unsigned long pVariableId, T pValue, unsig
   writeMessage->SetValue(value);
   writeMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
+  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   if (ret->GetType() != WRITERESPONSEMESSAGE) {
     spdlog::critical("Expecting WRITERESPONSEMESSAGE, but get {}", ret->GetType());
@@ -123,6 +121,7 @@ Agent::SendRangeQueryPointMessageAndGetResponse(unsigned long pTime, const Point
   rangeQueryMessage->SetNumberOfTraverseHops(0);
   rangeQueryMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
+  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   return (const RangeQueryMessage *) ret;
 }
@@ -137,12 +136,14 @@ void Agent::SendGVTMessage() {
 
 void Agent::WaitUntilMessageArrive() {
 
-  //spdlog::debug("Waiting... agent {0}", this->agent_id());
+//  spdlog::debug("Waiting... agent {0}", this->agent_id());
+  spdlog::debug("WaitUntilMessageArrive start... agent {0}", this->agent_id());
   while (!this->message_ready_) {
+    //spdlog::debug("message_ready_ in...agent {0}", this->agent_id());
     SyncPoint(); // busy waiting, make sure it can be interrupted
+    usleep(100000);
   }
-  //spdlog::debug("Wait finished! agent {0}", this->agent_id());
-
+  spdlog::debug("Wait finished! agent {0}", this->agent_id());
   this->SyncPoint();
   this->message_ready_ = false;
 }
@@ -152,12 +153,11 @@ void Agent::Finalise() {
 }
 
 bool Agent::SetLVT(unsigned long lvt) {
-  this->localLvt = lvt;
-  return true;
+  return attached_alp_->SetAgentLvt(agent_identifier_.GetId(), lvt);
 }
 
 unsigned long Agent::GetLVT() const {
-  return this->localLvt;
+  return attached_alp_->GetAgentLvt(agent_identifier_.GetId());
 }
 
 
@@ -189,6 +189,7 @@ const int Agent::ReadInt(unsigned long variable_id, unsigned long timestamp) {
   auto v = dynamic_cast<const Value<int> *>(ret->GetValue())->GetValue();
   this->SetLVT(timestamp + 1);
   return v;
+
 }
 
 
@@ -232,35 +233,42 @@ const string Agent::ReadString(unsigned long variable_id, unsigned long timestam
 }
 
 const int Agent::ReadPrivateInt(unsigned long variable_id) {
-  return 0;
+  return dynamic_cast<const Value<int> *>(private_variable_storage_->ReadVariable(variable_id,
+                                                                                  this->GetLVT()))->GetValue();
 }
 
 const double Agent::ReadPrivateDouble(unsigned long variable_id) {
-  return 0;
+  return dynamic_cast<const Value<double> *>(private_variable_storage_->ReadVariable(variable_id,
+                                                                                     this->GetLVT()))->GetValue();
+
 }
 
 const Point Agent::ReadPrivatePoint(unsigned long variable_id) {
-  return Point();
+  return dynamic_cast<const Value<Point> *>(private_variable_storage_->ReadVariable(variable_id,
+                                                                                    this->GetLVT()))->GetValue();
+
 }
 
 const string Agent::ReadPrivateString(unsigned long variable_id) {
-  return std::__cxx11::string();
+  return dynamic_cast<const Value<string> *>(private_variable_storage_->ReadVariable(variable_id,
+                                                                                     this->GetLVT()))->GetValue();
+
 }
 
 bool Agent::WritePrivateInt(unsigned long variable_id, int v) {
-  return false;
+  return private_variable_storage_->WriteVariable(variable_id, new Value<int>(v), this->GetLVT());
 }
 
 bool Agent::WritePrivateDouble(unsigned long variable_id, double v) {
-  return false;
+  return private_variable_storage_->WriteVariable(variable_id, new Value<double>(v), this->GetLVT());
 }
 
 bool Agent::WritePrivatePoint(unsigned long variable_id, Point v) {
-  return false;
+  return private_variable_storage_->WriteVariable(variable_id, new Value<Point>(v), this->GetLVT());
 }
 
 bool Agent::WritePrivateString(unsigned long variable_id, string v) {
-  return false;
+  return private_variable_storage_->WriteVariable(variable_id, new Value<string>(v), this->GetLVT());
 }
 
 bool Agent::WriteInt(unsigned long variable_id, int value, unsigned long timestamp) {
@@ -324,16 +332,8 @@ void Agent::ResetMessageArriveFlag() {
 
 void Agent::Start() {
   ThreadWrapper::Start(true);
-  ostringstream ss;
-  ss << std::this_thread::get_id();
-  spdlog::info("Agent {}, thread start, id {:x}", this->agent_id_, stoull(ss.str()));
 }
 
-void Agent::UpdateLvtToAlp() {
-  this->attached_alp_->UpdateAgentLvtToAlp(this->agent_id_, this->GetLVT());
+const bool Agent::AddPrivateVariable(unsigned long variable_id) {
+  return this->private_variable_storage_->AddVariable(variable_id);
 }
-
-
-
-
-

@@ -72,13 +72,20 @@ Alp::Alp(unsigned int pRank, unsigned int pCommSize,
 const AbstractMessage *Alp::GetResponseMessage(unsigned long agent_id) const {
   auto it = agent_response_map_.find(agent_id);
 
-  assert(it != agent_response_map_.end());
+  if (it == agent_response_map_.end()) {
+    managed_agents_.find(agent_id)->second->Abort();
+    managed_agents_.find(agent_id)->second->Join();
+    managed_agents_.find(agent_id)->second->ResetMessageArriveFlag();
+    managed_agents_.find(agent_id)->second->Restart();
+    return nullptr;
+  }
   auto v = it->second;
   if (v == nullptr) {
     spdlog::critical("GetResponseMessage nullptr encountered!!! {}, time {}, waiting for message {}", agent_id,
-                     this->GetAlpManagedAgentLvt(agent_id),
+                     this->managed_agents_.find(agent_id)->second->GetLVT(),
                      agent_response_message_id_map_.find(agent_id)->second);
-    exit(1);
+
+
   }
 
   //agent_response_map_.erase(it);
@@ -155,17 +162,29 @@ void Alp::Send() {
   }
   ostringstream out;
   message->Serialise(out);
-  spdlog::debug("ALP send message: {}", out.str());
+  spdlog::debug("ALP {} send message: {}", this->GetRank(), out.str());
   fMPIInterface->Send(message);
 }
 
 void Alp::Receive() {
+  // do agent restart
+  pthread_t t;
+  pthread_create(&t, nullptr,
+                 [](void *self) -> void * { // capture-less lambda
+                   static_cast<Alp *>(self)->doSelfRestart();
+                   return nullptr;
+                 },
+                 this);
+//  for (auto i:restart_map_) {
+//    this->doSelfRestart(i);
+//  }
+//  restart_map_.clear();
   // Fetch received message from the receive queue
   AbstractMessage *message = fReceiveMessageQueue->DequeueMessage();
   //spdlog::debug("Message arrived, rank {0}, type {1}", this->GetRank(), message->GetType());
   ostringstream out;
   message->Serialise(out);
-  spdlog::debug("ALP receive message: {}", out.str());
+  spdlog::debug("ALP {} receive message: {}", this->GetRank(), out.str());
   fProcessMessageMutex.Lock();
   switch (message->GetType()) {
     case SINGLEREADRESPONSEMESSAGE: {
@@ -236,8 +255,10 @@ void Alp::ProcessMessage(const SingleReadResponseMessage *pSingleReadResponseMes
     spdlog::debug("Alp::ProcessMessage(SingleReadResponseMessage): Agent {}, get response message id = {}", agent_id,
                   agent_response_message_id_map_[agent_id]);
     agent_response_map_[agent_id] = pSingleReadResponseMessage;
-    this->GetAgent(agent_id)->SetMessageArriveFlag();
+    Agent *agent = this->managed_agents_[agent_id];
+    agent->SetMessageArriveFlag();
   }
+
 }
 
 void Alp::ProcessMessage(const WriteResponseMessage *pWriteResponseMessage) {
@@ -257,7 +278,8 @@ void Alp::ProcessMessage(const WriteResponseMessage *pWriteResponseMessage) {
     spdlog::debug("Alp::ProcessMessage(WriteResponseMessage): Agent {}, get response message id = {}", agent_id,
                   agent_response_message_id_map_[agent_id]);
     agent_response_map_[agent_id] = pWriteResponseMessage;
-    this->GetAgent(agent_id)->SetMessageArriveFlag();
+    Agent *agent = this->managed_agents_[agent_id];
+    agent->SetMessageArriveFlag();
   } else {
     spdlog::debug("Alp::ProcessMessage(WriteResponseMessage): Message discarded, id {}, agent {} waiting for {}",
                   pWriteResponseMessage->GetIdentifier(), agent_id, agent_response_message_id_map_[agent_id]);
@@ -269,9 +291,10 @@ void Alp::ProcessMessage(const RangeQueryMessage *pRangeQueryMessage) {
   unsigned long agent_id = pRangeQueryMessage->GetOriginalAgent().GetId();
   //spdlog::debug("Agent {} received RangeQueryMessage", agent_id);
   if (agent_response_message_id_map_[agent_id] == pRangeQueryMessage->GetIdentifier()) {
-    //spdlog::debug("Signal agent {}, response message {}", agent_id, agent_response_message_id_map_[agent_id]);
+    spdlog::debug("Signal agent {}, response message {}", agent_id, agent_response_message_id_map_[agent_id]);
     agent_response_map_[agent_id] = pRangeQueryMessage;
-    this->GetAgent(agent_id)->SetMessageArriveFlag();
+    Agent *agent = this->managed_agents_[agent_id];
+    agent->SetMessageArriveFlag();
   }
 
 
@@ -289,25 +312,17 @@ bool Alp::ProcessRollback(const RollbackMessage *pRollbackMessage) {
 
   unsigned long rollback_message_timestamp = pRollbackMessage->GetTimestamp();
   unsigned long agent_id = pRollbackMessage->GetOriginalAgent().GetId();
-  Agent *agent = this->GetAgent(agent_id);
-  spdlog::debug("Alp::ProcessRollback Agent {0} rollback message received, timestamp {1}, current GVT {2}",
-                agent_id, rollback_message_timestamp, this->GetGvt());
-  if (rollback_message_timestamp < this->GetGvt()) {
-    spdlog::critical(
-        "Alp::ProcessRollback rollback message timestamp smaller than GVT! Agent {0}, timestamp {1}, current GVT {2}",
-        agent_id, rollback_message_timestamp, this->GetGvt());
-    exit(1);
-  }
+  Agent *agent = managed_agents_[agent_id];
+  // make sure agent under this ALP
+  assert(HasAgent(agent_id));
+
   // Check if rollback already on tag list
   if (CheckRollbackTagList(pRollbackMessage->GetRollbackTag())) {
     spdlog::debug("Alp::ProcessRollback: RB tag already in list, ignored");
     return false;
   }
   // Check if rollback rolls back far enough
-  if (rollback_message_timestamp >= agent->GetLVT()) {
-    spdlog::warn(
-        "Alp::ProcessRollback(): Rollback time not smaller than LVT, agent: {}, local LVT {}, rollback time: {}",
-        agent_id, agent->GetLVT(), rollback_message_timestamp);
+  if (pRollbackMessage->GetTimestamp() >= GetAgentLvt(pRollbackMessage->GetOriginalAgent().GetId())) {
     return false;
   }
   // Rollback message is good, rollback
@@ -316,51 +331,52 @@ bool Alp::ProcessRollback(const RollbackMessage *pRollbackMessage) {
 
   if (rollback_message_timestamp < 0) {
     spdlog::critical("Alp::ProcessRollback(): Rollback time smaller than 0, agent: {}, LVT {}, rollback time: {}",
-                     agent_id, GetAlpManagedAgentLvt(agent_id), rollback_message_timestamp);
+                     agent_id, GetAgentLvt(agent_id), rollback_message_timestamp);
     exit(1);
   }
-
+  if (rollback_message_timestamp >= agent_lvt_map_[agent_id]) {
+    spdlog::error("Alp::ProcessRollback(): Rollback time not smaller than LVT, agent: {}, LVT {}, rollback time: {}",
+                  agent_id, GetAgentLvt(agent_id), rollback_message_timestamp);
+    //exit(1);
+    agent_lvt_map_[agent_id] = fGVT;
+    return false;
+  }
   //spdlog::debug("Process rollback!");
 
 
   // stop the agent
-  spdlog::debug("Agent {} RB stopping", agent_id);
   agent->Abort();
-  spdlog::debug("Agent {} agent->Abort()", agent_id);
-
+  //spdlog::debug("Agent stopping");
   // should have been stopped if not in final waiting stage
   // cancel flag need to be set before resetting semaphore
   SetCancelFlag(agent_id, true);
-  spdlog::debug("Agent {} SetCancelFlag", agent_id);
-
   // should have been stopped if in final waiting stage
   agent->ResetMessageArriveFlag();
-  spdlog::debug("Agent {} ResetMessageArriveFlag", agent_id);
 
   //delete agent_response_map_[agent_id];
 
   agent->Join();
-  spdlog::debug("Agent {} RB stopped", agent_id);
+  //spdlog::debug("Agent stopped");
   //agent_response_map_[agent_id] = nullptr;
   //spdlog::debug("agent_response_map_[{}] set to nullptr", agent_id);
 
   //agent_response_message_id_map_[agent_id] = 0;
 
   // rollback LVT and history
+  unsigned long rollback_to_timestamp = ULONG_MAX;
+//  auto &agent_lvt_history_list = agent_lvt_history_map_[agent_id];
+//  // get first LVT <= rollback, delete following
+//  agent_lvt_history_list.erase(
+//      std::upper_bound(agent_lvt_history_list.begin(), agent_lvt_history_list.end(), rollback_message_timestamp),
+//      agent_lvt_history_list.end());
+//  rollback_to_timestamp = agent_lvt_history_list.back();
 
-  unsigned long rollback_to_timestamp = this->RollbackAgentLvtHistory(agent_id, rollback_message_timestamp);
-  if (rollback_to_timestamp < this->GetGvt()) {
-    spdlog::critical(
-        "Alp::ProcessRollback rollback to timestamp smaller than GVT! Agent {0}, timestamp {1}, current GVT {2}",
-        agent_id, rollback_to_timestamp, this->GetGvt());
-    exit(1);
-  }
-  spdlog::warn("LOGRB {} {} {}", agent_id, rollback_to_timestamp, GetAlpManagedAgentLvt(agent_id));
-  // check if need to rollback alp managed lvt history
-  if (rollback_to_timestamp < GetAlpManagedAgentLvt(agent_id)) {
-    this->SetAlpManagedAgentLvt(agent_id, rollback_to_timestamp);
-  }
-  this->SetAgentLocalLvtAfterRollback(agent_id, rollback_to_timestamp);
+
+  rollback_to_timestamp = rollback_message_timestamp;
+  assert(rollback_to_timestamp < ULONG_MAX);
+  spdlog::warn("LOGRB {} {} {}", agent_id, rollback_to_timestamp, agent_lvt_map_[agent_id]);
+
+  agent_lvt_map_[agent_id] = rollback_to_timestamp;
 
   spdlog::debug("Agent {0} rollback to timestamp {1}", agent_id, rollback_to_timestamp);
 
@@ -387,7 +403,8 @@ bool Alp::ProcessRollback(const RollbackMessage *pRollbackMessage) {
       (*iter)->Serialise(out);
       spdlog::error("Alp::ProcessRollback({}): rollback before GVT, time {}, message {}", GetRank(),
                     (*iter)->GetTimestamp(), out.str());
-
+      agent_lvt_map_[agent_id] = fGVT;
+      return false;
     } else {
       switch ((*iter)->GetType()) {
         case SINGLEREADMESSAGE : {
@@ -401,7 +418,9 @@ bool Alp::ProcessRollback(const RollbackMessage *pRollbackMessage) {
           antiSingleReadMessage->SetRollbackTag(pRollbackMessage->GetRollbackTag());
           antiSingleReadMessage->SetOriginalAgent(singleReadMessage->GetOriginalAgent());
           antiSingleReadMessage->SetSsvId(singleReadMessage->GetSsvId());
-          antiSingleReadMessage->SendToLp(this);
+          if (antiSingleReadMessage->GetSsvId().id() != 0) {
+            antiSingleReadMessage->SendToLp(this);
+          }
         }
           break;
         case WRITEMESSAGE : {
@@ -466,15 +485,11 @@ int Alp::GetParentClp() const {
 unsigned long Alp::GetLvt() const {
   unsigned long minimum_agent_lvt = ULONG_MAX;
   for (auto iter:agent_lvt_map_) {
-    unsigned long agentLvt = iter.second;
-    if (agentLvt < minimum_agent_lvt) {
-      minimum_agent_lvt = agentLvt;
-      spdlog::debug("Alp::GetLvt() new minimum: {}, {}, rank {}", iter.first, agentLvt, this->GetRank());
+    if (iter.second < minimum_agent_lvt) {
+      minimum_agent_lvt = iter.second;
     }
   }
   assert(minimum_agent_lvt != ULONG_MAX);
-  spdlog::debug("Alp::GetLvt() LVT {}, rank {}", minimum_agent_lvt, this->GetRank());
-
   return minimum_agent_lvt;
 }
 
@@ -483,59 +498,36 @@ void Alp::SetGvt(unsigned long pGvt) {
   fGVT = pGvt;
   ClearSendList(pGvt);
   ClearRollbackTagList(pGvt);
-  CleanUpAgentLvtHistory(pGvt);
 }
+
 
 unsigned long Alp::GetNewMessageId() const {
   return message_id_handler_->GetNextID();
 }
 
 bool Alp::HasAgent(unsigned long agent_id) {
-  return managed_agents_.find(agent_id) != managed_agents_.end();
+  return agent_lvt_map_.find(agent_id) != agent_lvt_map_.end();
 }
 
-unsigned long Alp::GetAlpManagedAgentLvt(unsigned long agent_id) const {
+unsigned long Alp::GetAgentLvt(unsigned long agent_id) const {
   auto result = agent_lvt_map_.find(agent_id);
   if (result != agent_lvt_map_.end()) {
     return result->second;
   }
   spdlog::critical("Agent LVT not in map! id {0}", agent_id);
-  exit(1);
+  exit(1); //TODO this
 }
 
-bool Alp::SetAlpManagedAgentLvt(unsigned long agent_id, unsigned long newLvt) {
+bool Alp::SetAgentLvt(unsigned long agent_id, unsigned long lvt) {
   auto lvt_it = agent_lvt_map_.find(agent_id);
-  if (lvt_it == agent_lvt_map_.end()) {
-    spdlog::critical("Alp::SetAlpManagedAgentLvt({}, {}) agent not found!", agent_id, newLvt);
-    exit(1);
-  }
-
-  lvt_it->second = newLvt;
-  return true;
-
-}
-
-bool Alp::UpdateAgentLvtToAlp(unsigned long agentId, unsigned long newLvt) {
-  unsigned long oldLvt = this->GetAlpManagedAgentLvt(agentId);
-  if (oldLvt < newLvt) {
-    this->SetAlpManagedAgentLvt(agentId, newLvt);
-    this->RecordAgentLvtHistory(agentId, newLvt);
-    return true;
-  }
-  spdlog::error("Alp::UpdateAgentLvtToAlp({}, {}): new {} <= old {}", agentId, newLvt, newLvt, oldLvt);
-
-  return false;
-}
-
-bool Alp::RecordAgentLvtHistory(unsigned long agent_id, unsigned long timestamp) {
   auto lvt_history_it = agent_lvt_history_map_.find(agent_id);
-  if (timestamp > lvt_history_it->second.back()) {
-    lvt_history_it->second.push_back(timestamp);
-    return true;
+  assert(lvt_it != agent_lvt_map_.end());
+  assert(lvt_history_it != agent_lvt_history_map_.end());
+  if (lvt_it->second <= lvt) {
+    lvt_it->second = lvt;
+    lvt_history_it->second.push_back(lvt);
   }
-  spdlog::error("Alp::RecordAgentLvtHistory({}, {}): not inserted, new {} <= lvt history largest {}", agent_id,
-                timestamp, timestamp,
-                lvt_history_it->second.back());
+
 
   return false;
 }
@@ -549,7 +541,7 @@ void Alp::Finalise() {
   spdlog::info("Entering ALP finalise");
 
   for (auto a:managed_agents_) {
-    a.second->Join(); // wait for all agents to exit
+    a.second->Abort(); // wait for all agents to exit
   }
   SendEndMessage();
 
@@ -587,53 +579,28 @@ bool Alp::GetCancelFlag(unsigned long agent_id) {
   return agent_cancel_flag_map_[agent_id];
 }
 
-unsigned long Alp::RollbackAgentLvtHistory(unsigned long agentId, unsigned long timestamp) {
-  /**
-   * Given rollback message timestamp, erase agent lvt history which is larger than this timestamp
-   * Returns the timestamp agent should rollback to**/
+void Alp::triggerSelfRestart(unsigned long agent_id) {
+  this->restart_map_.insert(agent_id);
+}
 
-  auto &agent_lvt_history_list = agent_lvt_history_map_[agentId];
-  spdlog::debug("Alp::RollbackAgentLvtHistory({}, {}), initial size: {}", agentId, timestamp,
-                agent_lvt_history_list.size());
-  for (auto i:agent_lvt_history_list) {
-    spdlog::debug("Agent {}, have history ts {}", agentId, i);
+void Alp::doSelfRestart() {
+  if (this->restart_p) {
+    return;
   }
-  // get first LVT <= rollback, delete all histories afterward ()
-  agent_lvt_history_list.erase(
-      std::upper_bound(agent_lvt_history_list.begin(), agent_lvt_history_list.end(), timestamp),
-      agent_lvt_history_list.end());
-  spdlog::debug("Alp::RollbackAgentLvtHistory: Agent {}, rollback to {}, size after rb: {}", agentId,
-                agent_lvt_history_list.back(), agent_lvt_history_list.size());
+  this->restart_p = true;
+  for (auto agent_id:restart_map_) {
+    Agent *agent = this->managed_agents_.find(agent_id)->second;
+    agent->Abort();
 
-  return agent_lvt_history_list.back();
-}
-
-Agent *Alp::GetAgent(unsigned long agentId) {
-  if (managed_agents_.find(agentId) == managed_agents_.end()) {
-    spdlog::critical("Agent {} not found in ALP {}!", agentId, this->GetRank());
-    exit(1);
+    SetCancelFlag(agent_id, true);
+    agent->ResetMessageArriveFlag();
+    agent->Join();
+    sleep(1);
+    SetCancelFlag(agent_id, false);
+    agent_response_map_[agent_id] = nullptr;
+    agent_response_message_id_map_[agent_id] = 0;
+    agent->Restart();
   }
-  return managed_agents_[agentId];
+  restart_map_.clear();
+  this->restart_p = false;
 }
-
-bool Alp::SetAgentLocalLvtAfterRollback(unsigned long agent_id, unsigned long newLvt) {
-  this->GetAgent(agent_id)->SetLVT(newLvt);
-  return true;
-}
-
-bool Alp::CleanUpAgentLvtHistory(unsigned long timestamp) {
-  for (auto &i:agent_lvt_history_map_) {
-    auto &agent_lvt_history_list = i.second;
-    agent_lvt_history_list.erase(
-        agent_lvt_history_list.begin(),
-        std::lower_bound(agent_lvt_history_list.begin(), agent_lvt_history_list.end(), timestamp)
-    );
-  }
-  return true;
-}
-
-map<unsigned long, list<unsigned long>> Alp::GetAgentTimeHistoryMap() const {
-  return this->agent_lvt_history_map_;
-}
-
-

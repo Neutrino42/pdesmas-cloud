@@ -16,7 +16,10 @@
 #include "HasResponseMessage.h"
 #include "EndMessage.h"
 #include "PrivateVariableStorage.h"
+#include <csignal>
 #include "ThreadWrapper.h"
+#define SENSE_STAGE 100001
+#define ACT_STAGE 100102
 
 namespace pdesmas {
   class Agent : public ThreadWrapper {
@@ -35,16 +38,21 @@ namespace pdesmas {
     SendRangeQueryPointMessageAndGetResponse(unsigned long pTime, const Point pStartValue, const Point pEndValue);
 
 
+    bool SetLVT(unsigned long lvt);
+
     Alp *attached_alp_ = nullptr;
     LpId agent_identifier_;
     bool message_ready_ = false;
     unsigned long start_time_;
     unsigned long end_time_;
     unsigned long agent_id_;
-    unsigned long localLvt = 0;
+    unsigned long reentry_point_;
+    bool action_submitted_= false;
     PrivateVariableStorage *private_variable_storage_;
 
     void Body() final;
+
+
 
   protected:
     void SendGVTMessage();
@@ -58,7 +66,7 @@ namespace pdesmas {
     const Point ReadPoint(unsigned long variable_id, unsigned long timestamp);
 
     const string ReadString(unsigned long variable_id, unsigned long timestamp);
-
+    const bool AddPrivateVariable(unsigned long variable_id);
     const int ReadPrivateInt(unsigned long variable_id);
 
     const double ReadPrivateDouble(unsigned long variable_id);
@@ -94,14 +102,12 @@ namespace pdesmas {
 
     // agent's main loop, must be overridden
     virtual void Cycle() = 0;
-
+    //virtual void Sense()=0;
+    //virtual void Act()=0;
     void Start();
-
     unsigned long agent_id() { return agent_id_; };
 
     unsigned long GetLVT() const;
-
-    bool SetLVT(unsigned long lvt);
 
     unsigned long GetAlpLVT() const;
 
@@ -115,8 +121,6 @@ namespace pdesmas {
     void SetMessageArriveFlag();
 
     void ResetMessageArriveFlag();
-
-    void UpdateLvtToAlp();
   };
 }
 

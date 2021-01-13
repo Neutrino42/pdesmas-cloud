@@ -1,0 +1,21 @@
+/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=/usr/bin/cc -DCMAKE_CXX_COMPILER=/usr/bin/c++ -G "CodeBlocks - Unix Makefiles" /Users/yuke/Desktop/SUSTech/pdesmas-cloud/image/cluster/project
+-- The C compiler identification is AppleClang 11.0.0.11000033
+-- The CXX compiler identification is AppleClang 11.0.0.11000033
+-- Check for working C compiler: /usr/bin/cc
+-- Check for working C compiler: /usr/bin/cc -- works
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found MPI_C: /usr/local/lib/libmpi.dylib (found version "3.1") 
+-- Found MPI_CXX: /usr/local/lib/libmpi.dylib (found version "3.1") 
+-- Found MPI: TRUE (found version "3.1")  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /Users/yuke/Desktop/SUSTech/pdesmas-cloud/image/cluster/project/cmake-build-debug
