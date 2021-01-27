@@ -15,15 +15,20 @@ IdentifierHandler::IdentifierHandler(unsigned int pRank, unsigned int pNumberOfC
 }
 
 unsigned long IdentifierHandler::GetNextID() {
-//  lock_.Lock();
+  unsigned long t;
+  lock_.Lock();
   // Handle tick over ULONG_MAX
-  std::unique_lock<std::mutex> lck (getIDMutex);
   if (fLastID > (ULONG_MAX - fAdditional)) fLastID = fInitialID;
   else fLastID += fAdditional;
-//  lock_.Unlock();
-  return fLastID;
+  t = fLastID;
+  lock_.Unlock();
+  return t;
 }
 
-unsigned long IdentifierHandler::GetLastID() const {
-  return fLastID;
+unsigned long IdentifierHandler::GetLastID() {
+  unsigned long t;
+  lock_.Lock();
+  t = fLastID;
+  lock_.Unlock();
+  return t;
 }

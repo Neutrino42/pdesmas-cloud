@@ -44,6 +44,7 @@ void StateVariable::RemoveWritePeriods(unsigned long pTime) {
 //  }
   //spdlog::warn("LOGMEM ssv {} time {} LEN {}", this->fStateVariableID.id(), pTime, sumlen);
   SerialisableList<WritePeriod>::reverse_iterator reverseWritePeriodIterator = fWritePeriodList.rbegin();
+  uint64_t size_before = fWritePeriodList.size();
   // Walk backwards to the list until the reach the write period with an equal or less than start time then the parameter time
   while (reverseWritePeriodIterator != fWritePeriodList.rend()) {
     if (reverseWritePeriodIterator->GetStartTime() <= pTime) break;
@@ -73,6 +74,9 @@ void StateVariable::RemoveWritePeriods(unsigned long pTime) {
       << "StateVariable::RemoveWritePeriod# " << *writePeriodIterator;
   }
   LOG(logFINEST) << "StateVariable::RemoveWritePeriods# End of write period list.";
+  
+  uint64_t size_after = fWritePeriodList.size();
+  spdlog::info("Number of remover histtory is {} with {}", size_after - size_before, this->fStateVariableID.id());
 }
 
 AbstractValue *StateVariable::Read(const LpId &pReadingAgent, unsigned long pTime) {

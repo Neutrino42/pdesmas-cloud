@@ -329,11 +329,11 @@ bool Alp::ProcessRollback(const RollbackMessage *pRollbackMessage) {
 
   // Reset LVT map
 
-  if (rollback_message_timestamp < 0) {
-    spdlog::critical("Alp::ProcessRollback(): Rollback time smaller than 0, agent: {}, LVT {}, rollback time: {}",
-                     agent_id, GetAgentLvt(agent_id), rollback_message_timestamp);
-    exit(1);
-  }
+//  if (rollback_message_timestamp < 0) {
+//    spdlog::critical("Alp::ProcessRollback(): Rollback time smaller than 0, agent: {}, LVT {}, rollback time: {}",
+//                     agent_id, GetAgentLvt(agent_id), rollback_message_timestamp);
+//    exit(1);
+//  }
   if (rollback_message_timestamp >= agent_lvt_map_[agent_id]) {
     spdlog::error("Alp::ProcessRollback(): Rollback time not smaller than LVT, agent: {}, LVT {}, rollback time: {}",
                   agent_id, GetAgentLvt(agent_id), rollback_message_timestamp);

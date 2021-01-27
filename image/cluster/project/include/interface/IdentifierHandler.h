@@ -18,12 +18,11 @@ namespace pdesmas {
       const unsigned long fAdditional;
       unsigned long fLastID;
       Mutex lock_;
-      std::mutex getIDMutex;
     public:
       IdentifierHandler(unsigned int, unsigned int, unsigned int);
 
       unsigned long GetNextID();
-      unsigned long GetLastID() const;
+      unsigned long GetLastID();
   };
 }
 

@@ -62,7 +62,6 @@ const SingleReadResponseMessage *Agent::SendReadMessageAndGetResponse(unsigned l
   singleReadMessage->SetSsvId(ssvId);
   singleReadMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
-  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   if (ret->GetType() != SINGLEREADRESPONSEMESSAGE) {
     spdlog::critical("Expecting SINGLEREADRESPONSEMESSAGE, get {}", ret->GetType());
@@ -92,7 +91,6 @@ Agent::SendWriteMessageAndGetResponse(unsigned long pVariableId, T pValue, unsig
   writeMessage->SetValue(value);
   writeMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
-  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   if (ret->GetType() != WRITERESPONSEMESSAGE) {
     spdlog::critical("Expecting WRITERESPONSEMESSAGE, but get {}", ret->GetType());
@@ -121,7 +119,6 @@ Agent::SendRangeQueryPointMessageAndGetResponse(unsigned long pTime, const Point
   rangeQueryMessage->SetNumberOfTraverseHops(0);
   rangeQueryMessage->SendToLp(attached_alp_);
   WaitUntilMessageArrive();
-  spdlog::debug("WaitUntilMessageArrive done... agent {0}", this->agent_id());
   const AbstractMessage *ret = attached_alp_->GetResponseMessage(agent_identifier_.GetId());
   return (const RangeQueryMessage *) ret;
 }
@@ -136,10 +133,8 @@ void Agent::SendGVTMessage() {
 
 void Agent::WaitUntilMessageArrive() {
 
-//  spdlog::debug("Waiting... agent {0}", this->agent_id());
-  spdlog::debug("WaitUntilMessageArrive start... agent {0}", this->agent_id());
+  spdlog::debug("Waiting... agent {0}", this->agent_id());
   while (!this->message_ready_) {
-    //spdlog::debug("message_ready_ in...agent {0}", this->agent_id());
     SyncPoint(); // busy waiting, make sure it can be interrupted
     usleep(100000);
   }

@@ -3,7 +3,7 @@ project(PDES-MAS)
 find_package(MPI REQUIRED)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_COMPILER mpicxx)
-set(PDESMAS_CXX_FLAGS "-DRANGE_QUERIES -DSSV_LOCALISATION -fPIC -Wall -pthread -lpthread -Wl,--no-as-needed,-rpath='${ORIGIN}'")
+set(PDESMAS_CXX_FLAGS "-DRANGE_QUERIES -DSSV_LOCALISATION -fPIC -Wall -Wextra -pthread -lpthread -Wl,--no-as-needed,-rpath='${ORIGIN}'")
 
 link_libraries(m stdc++ pthread)
 
